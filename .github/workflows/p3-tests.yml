@@ -1,0 +1,52 @@
+# Synthetic Q1 qualification workflow.
+# Check/job name: p3-tests
+#
+# Runs on windows-latest so the required check exercises the exact-byte
+# stdout/stderr contract (LF, not CRLF from text-mode write translation).
+#
+# Synthetic qualification fault switch (repository variable P3_TEST_MODE):
+# - empty or any value other than force_failure: normal test run
+# - force_failure: run tests on this SHA, then exit nonzero (approved RP diagnostic fixture)
+# Editing a PR body retriggers this workflow (pull_request edited) so a new
+# variable value can be observed on the same commit SHA during branch-protection qualification.
+
+name: p3-tests
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p3-tests:
+    name: p3-tests
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Run tests with P3_TEST_MODE switch
+        shell: pwsh
+        env:
+          P3_TEST_MODE: ${{ vars.P3_TEST_MODE }}
+        run: |
+          Write-Host "P3_TEST_MODE resolved value: '$env:P3_TEST_MODE'"
+          python run_tests.py
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          if ($env:P3_TEST_MODE -eq 'force_failure') {
+            Write-Host "P3_TEST_MODE=force_failure: forcing nonzero failure after tests (SHA $env:GITHUB_SHA)"
+            exit 1
+          }
