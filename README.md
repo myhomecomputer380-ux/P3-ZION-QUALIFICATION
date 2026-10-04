@@ -24,7 +24,7 @@ optional key `priority`:
 | --- | --- |
 | `ticket_id` | ASCII string matching `Q-` + exactly three ASCII digits (`Q-000` … `Q-999`) |
 | `status` | exactly `todo` or `done` (case-sensitive) |
-| `priority` | optional; JSON integer `0`, `1`, or `2` only. JSON booleans are forbidden. |
+| `priority` | optional; exact JSON integer `0`, `1`, or `2` only. JSON booleans `true` and `false` are rejected (`INVALID_PRIORITY`). |
 
 When `priority` is absent, the success object is exactly the Q1 shape
 (`ticket_id` then `status`). When present, keys are emitted in order
@@ -56,7 +56,7 @@ Decoder failures (malformed JSON, oversized numeric literals that raise `ValueEr
 | `UNKNOWN_FIELD` | any key other than `ticket_id` / `status` / `priority` |
 | `INVALID_TICKET_ID` | wrong type or value for `ticket_id` |
 | `INVALID_STATUS` | wrong type or value for `status` |
-| `INVALID_PRIORITY` | wrong type or value for `priority` (not a JSON integer in `{0,1,2}`) |
+| `INVALID_PRIORITY` | wrong type or value for `priority` (not an exact JSON integer in `{0,1,2}`; booleans rejected) |
 
 ### Tests
 
@@ -68,4 +68,13 @@ The runner discovers `test_*.py`, fails if zero tests are found, and fails on an
 
 ### CI
 
-GitHub Actions workflow `.github/workflows/p3-tests.yml` defines jobs on `pull_request` (`opened`, `synchronize`, `reopened`, `edited`, `ready_for_review`) and optional `workflow_dispatch`, with `permissions: contents: read`.
+GitHub Actions workflow `.github/workflows/p3-tests.yml` defines the required check/job `p3-tests` on `pull_request` (`opened`, `synchronize`, `reopened`, `edited`, `ready_for_review`) and optional `workflow_dispatch`, with `permissions: contents: read`.
+
+The job runs on `windows-latest` with PowerShell so the suite exercises the exact-byte LF contract against Windows text-mode newline translation. Checkout uses a full-SHA-pinned `actions/checkout` with `persist-credentials: false`. Python from the runner PATH is used (no extra install step). The job runs `python run_tests.py` and propagates its exit code.
+
+Repository variable `P3_TEST_MODE` is a synthetic qualification fault switch only (bound via step `env`, not interpolated into shell source):
+
+- empty / normal: run the test suite as usual
+- `force_failure`: after tests succeed on the same SHA, force a real nonzero job failure (branch-protection diagnostic fixture; not a product feature)
+
+The App5177134 Codex verdict remains external to this workflow; there is no Actions substitute job for that verdict.

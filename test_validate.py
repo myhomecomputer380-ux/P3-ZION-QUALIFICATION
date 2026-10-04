@@ -172,6 +172,20 @@ class RejectionTests(unittest.TestCase):
             "INVALID_PRIORITY",
         )
 
+    def test_priority_bool_true_rejected(self) -> None:
+        # Non-regression: bool subclasses int; initial isinstance(..., int) accepted true.
+        self.assert_rejects(
+            '{"ticket_id":"Q-001","status":"todo","priority":true}',
+            "INVALID_PRIORITY",
+        )
+
+    def test_priority_bool_false_rejected(self) -> None:
+        # Non-regression: bool subclasses int; initial isinstance(..., int) accepted false.
+        self.assert_rejects(
+            '{"ticket_id":"Q-001","status":"todo","priority":false}',
+            "INVALID_PRIORITY",
+        )
+
     def test_wrong_top_level_type(self) -> None:
         self.assert_rejects('["Q-001","todo"]', "NOT_OBJECT")
         self.assert_rejects('"Q-001"', "NOT_OBJECT")

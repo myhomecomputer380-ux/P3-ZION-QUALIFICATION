@@ -100,7 +100,8 @@ def parse_and_validate(raw: bytes) -> dict[str, Any]:
 
     if "priority" in data:
         priority = data["priority"]
-        if not isinstance(priority, int) or priority not in ALLOWED_PRIORITIES:
+        # Exact JSON integer only: bool subclasses int, so exclude with type().
+        if type(priority) is not int or priority not in ALLOWED_PRIORITIES:
             raise ValidationError("INVALID_PRIORITY")
         result["priority"] = priority
 
