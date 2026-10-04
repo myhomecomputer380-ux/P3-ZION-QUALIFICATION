@@ -32,6 +32,18 @@ def _object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return dict(pairs)
 
 
+def _write_stdout(data: bytes) -> None:
+    """Write exact bytes to stdout (bypass text-mode newline translation)."""
+    sys.stdout.buffer.write(data)
+    sys.stdout.buffer.flush()
+
+
+def _write_stderr(data: bytes) -> None:
+    """Write exact bytes to stderr (bypass text-mode newline translation)."""
+    sys.stderr.buffer.write(data)
+    sys.stderr.buffer.flush()
+
+
 def parse_and_validate(raw: bytes) -> dict[str, str]:
     try:
         text = raw.decode("utf-8")
@@ -47,6 +59,14 @@ def parse_and_validate(raw: bytes) -> dict[str, str]:
     except ValidationError:
         raise
     except json.JSONDecodeError as exc:
+        raise ValidationError("MALFORMED_JSON") from exc
+    except ValueError as exc:
+        # Includes Python int-digit limits (e.g. 5000-digit literals) and
+        # other decoder ValueErrors that are not JSONDecodeError subclasses
+        # in all versions; JSONDecodeError itself is a ValueError subclass.
+        raise ValidationError("MALFORMED_JSON") from exc
+    except RecursionError as exc:
+        # Deeply nested structures can overflow the decoder.
         raise ValidationError("MALFORMED_JSON") from exc
     except TypeError as exc:
         # Defensive: unexpected decoder callback failures.
@@ -81,11 +101,12 @@ def main() -> int:
     try:
         result = parse_and_validate(raw)
     except ValidationError as exc:
-        sys.stderr.write(exc.code + "\n")
+        _write_stderr((exc.code + "\n").encode("ascii"))
         return 2
 
     # Deterministic key order: ticket_id then status; compact separators.
-    sys.stdout.write(
+    # Exact trailing LF byte (0x0A); never CRLF via text-mode translation.
+    payload = (
         json.dumps(
             {"ticket_id": result["ticket_id"], "status": result["status"]},
             ensure_ascii=True,
@@ -93,6 +114,7 @@ def main() -> int:
         )
         + "\n"
     )
+    _write_stdout(payload.encode("ascii"))
     return 0
 
 

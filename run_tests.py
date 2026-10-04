@@ -15,7 +15,8 @@ def main() -> int:
     suite = loader.discover(str(ROOT), pattern="test_*.py")
     count = suite.countTestCases()
     if count == 0:
-        sys.stderr.write("DISCOVERY_ERROR: zero tests discovered\n")
+        sys.stderr.buffer.write(b"DISCOVERY_ERROR: zero tests discovered\n")
+        sys.stderr.buffer.flush()
         return 1
 
     result = unittest.TextTestRunner(verbosity=2).run(suite)

@@ -27,22 +27,24 @@ Input must be a JSON object with exactly two keys:
 **Valid input**
 
 - Exit `0`
-- stdout: one JSON object with keys in order `ticket_id` then `status`, compact separators (`","` / `":"`), single trailing newline
+- stdout: compact UTF-8/ASCII JSON with keys in order `ticket_id` then `status`, separators (`","` / `":"`), exactly one trailing LF byte (`0x0A`); never CRLF
 - stderr: empty
 
 **Invalid input**
 
 - Exit `2`
-- stderr: one diagnostic code below, then a newline
-- stdout: empty (no success object)
+- stderr: one stable ASCII diagnostic code, then exactly one LF byte (`0x0A`); never CRLF
+- stdout: empty (no success object, no traceback)
+
+Decoder failures (malformed JSON, oversized numeric literals that raise `ValueError`, deep nesting `RecursionError`, non-standard `NaN`/`Infinity`) and incorrect field types all use exit `2` with a diagnostic — never an uncaught exception.
 
 ### Diagnostic codes
 
 | Code | Meaning |
 | --- | --- |
 | `INVALID_UTF8` | stdin is not valid UTF-8 |
-| `MALFORMED_JSON` | not valid JSON, or non-standard constants (`NaN` / `Infinity` / `-Infinity`) |
-| `DUPLICATE_KEY` | duplicate object keys (including equal values) |
+| `MALFORMED_JSON` | not valid JSON, decoder limits/errors, or non-standard constants (`NaN` / `Infinity` / `-Infinity`) |
+| `DUPLICATE_KEY` | duplicate object keys (including equal values and escaped-equal keys) |
 | `NOT_OBJECT` | top-level JSON value is not an object |
 | `MISSING_FIELD` | `ticket_id` and/or `status` absent |
 | `UNKNOWN_FIELD` | any key other than `ticket_id` / `status` |
@@ -55,13 +57,15 @@ Input must be a JSON object with exactly two keys:
 python3 run_tests.py
 ```
 
-The runner discovers `test_*.py`, fails if zero tests are found, and fails on any test error.
+The runner discovers `test_*.py`, fails if zero tests are found, and fails on any test error. Assertions compare exact stdout/stderr bytes (including the single LF terminator) with no newline normalization.
 
 ### CI
 
-GitHub Actions workflow `.github/workflows/p3-tests.yml` defines the check/job `p3-tests` on `pull_request` (`opened`, `synchronize`, `reopened`, `edited`, `ready_for_review`) and optional `workflow_dispatch`.
+GitHub Actions workflow `.github/workflows/p3-tests.yml` defines the required check/job `p3-tests` on `pull_request` (`opened`, `synchronize`, `reopened`, `edited`, `ready_for_review`) and optional `workflow_dispatch`.
 
-Repository variable `P3_TEST_MODE` is a synthetic qualification fault switch only:
+The job runs on `windows-latest` with PowerShell so the suite exercises the exact-byte LF contract against Windows text-mode newline translation. Python from the runner PATH is used (no extra install step).
+
+Repository variable `P3_TEST_MODE` is a synthetic qualification fault switch only (bound via step `env`, not interpolated into shell source):
 
 - empty / normal: run the test suite as usual
 - `force_failure`: after tests succeed on the same SHA, force a real nonzero job failure (branch-protection diagnostic fixture; not a product feature)
