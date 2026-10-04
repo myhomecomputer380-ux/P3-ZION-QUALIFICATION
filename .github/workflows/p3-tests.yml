@@ -1,0 +1,48 @@
+# Synthetic Q1 qualification workflow.
+# Check/job name: p3-tests
+#
+# Synthetic qualification fault switch (repository variable P3_TEST_MODE):
+# - empty or any value other than force_failure: normal test run
+# - force_failure: run tests on this SHA, then exit nonzero (approved RP diagnostic fixture)
+# Editing a PR body retriggers this workflow (pull_request edited) so a new
+# variable value can be observed on the same commit SHA during branch-protection qualification.
+
+name: p3-tests
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p3-tests:
+    name: p3-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Run tests with P3_TEST_MODE switch
+        run: |
+          MODE="${{ vars.P3_TEST_MODE }}"
+          echo "P3_TEST_MODE resolved value: '${MODE}'"
+          python3 run_tests.py
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          if [ "$MODE" = "force_failure" ]; then
+            echo "P3_TEST_MODE=force_failure: forcing nonzero failure after tests (SHA ${GITHUB_SHA})"
+            exit 1
+          fi
