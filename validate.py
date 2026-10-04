@@ -11,6 +11,9 @@ from typing import Any
 TICKET_ID_RE = re.compile(r"^Q-[0-9]{3}$")
 ALLOWED_STATUSES = frozenset({"todo", "done"})
 REQUIRED_KEYS = frozenset({"ticket_id", "status"})
+OPTIONAL_KEYS = frozenset({"priority"})
+ALLOWED_KEYS = REQUIRED_KEYS | OPTIONAL_KEYS
+ALLOWED_PRIORITIES = frozenset({0, 1, 2})
 
 
 class ValidationError(Exception):
@@ -44,7 +47,7 @@ def _write_stderr(data: bytes) -> None:
     sys.stderr.buffer.flush()
 
 
-def parse_and_validate(raw: bytes) -> dict[str, str]:
+def parse_and_validate(raw: bytes) -> dict[str, Any]:
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -76,7 +79,7 @@ def parse_and_validate(raw: bytes) -> dict[str, str]:
         raise ValidationError("NOT_OBJECT")
 
     keys = set(data.keys())
-    unknown = keys - REQUIRED_KEYS
+    unknown = keys - ALLOWED_KEYS
     if unknown:
         raise ValidationError("UNKNOWN_FIELD")
     missing = REQUIRED_KEYS - keys
@@ -93,7 +96,16 @@ def parse_and_validate(raw: bytes) -> dict[str, str]:
     if not isinstance(status, str) or status not in ALLOWED_STATUSES:
         raise ValidationError("INVALID_STATUS")
 
-    return {"ticket_id": ticket_id, "status": status}
+    result: dict[str, Any] = {"ticket_id": ticket_id, "status": status}
+
+    if "priority" in data:
+        priority = data["priority"]
+        # Exact JSON integer only: bool subclasses int, so exclude with type().
+        if type(priority) is not int or priority not in ALLOWED_PRIORITIES:
+            raise ValidationError("INVALID_PRIORITY")
+        result["priority"] = priority
+
+    return result
 
 
 def main() -> int:
@@ -104,11 +116,18 @@ def main() -> int:
         _write_stderr((exc.code + "\n").encode("ascii"))
         return 2
 
-    # Deterministic key order: ticket_id then status; compact separators.
-    # Exact trailing LF byte (0x0A); never CRLF via text-mode translation.
+    # Deterministic key order: ticket_id, status, then priority when present;
+    # compact separators. Exact trailing LF byte (0x0A); never CRLF via
+    # text-mode translation.
+    ordered: dict[str, Any] = {
+        "ticket_id": result["ticket_id"],
+        "status": result["status"],
+    }
+    if "priority" in result:
+        ordered["priority"] = result["priority"]
     payload = (
         json.dumps(
-            {"ticket_id": result["ticket_id"], "status": result["status"]},
+            ordered,
             ensure_ascii=True,
             separators=(",", ":"),
         )

@@ -1,4 +1,4 @@
-# Synthetic Q1 qualification workflow.
+# Synthetic Q1/Q2 qualification workflow.
 # Check/job name: p3-tests
 #
 # Runs on windows-latest so the required check exercises the exact-byte
