@@ -63,32 +63,6 @@ class ValidInputTests(unittest.TestCase):
         self.assertEqual(proc.stderr, b"")
         self.assertEqual(proc.stdout, b'{"ticket_id":"Q-001","status":"todo"}\n')
 
-    def test_priority_integers(self) -> None:
-        for priority in (0, 1, 2):
-            with self.subTest(priority=priority):
-                payload = (
-                    f'{{"ticket_id":"Q-001","status":"todo","priority":{priority}}}'
-                )
-                proc = run_cli(payload)
-                self.assertEqual(proc.returncode, 0)
-                self.assertEqual(proc.stderr, b"")
-                self.assertEqual(
-                    proc.stdout,
-                    (
-                        f'{{"ticket_id":"Q-001","status":"todo","priority":{priority}}}'
-                        + "\n"
-                    ).encode(),
-                )
-
-    def test_priority_key_order_normalized(self) -> None:
-        proc = run_cli('{"priority":2,"status":"done","ticket_id":"Q-007"}')
-        self.assertEqual(proc.returncode, 0)
-        self.assertEqual(proc.stderr, b"")
-        self.assertEqual(
-            proc.stdout,
-            b'{"ticket_id":"Q-007","status":"done","priority":2}\n',
-        )
-
 
 class RejectionTests(unittest.TestCase):
     def assert_rejects(self, payload: bytes | str, code: str) -> None:
@@ -150,41 +124,16 @@ class RejectionTests(unittest.TestCase):
             "UNKNOWN_FIELD",
         )
 
-    def test_invalid_priority_values(self) -> None:
-        self.assert_rejects(
-            '{"ticket_id":"Q-001","status":"todo","priority":3}',
-            "INVALID_PRIORITY",
-        )
-        self.assert_rejects(
-            '{"ticket_id":"Q-001","status":"todo","priority":-1}',
-            "INVALID_PRIORITY",
-        )
-        self.assert_rejects(
-            '{"ticket_id":"Q-001","status":"todo","priority":"1"}',
-            "INVALID_PRIORITY",
-        )
-        self.assert_rejects(
-            '{"ticket_id":"Q-001","status":"todo","priority":1.0}',
-            "INVALID_PRIORITY",
-        )
-        self.assert_rejects(
-            '{"ticket_id":"Q-001","status":"todo","priority":null}',
-            "INVALID_PRIORITY",
-        )
-
-    def test_priority_bool_true_rejected(self) -> None:
-        # Non-regression: bool subclasses int; initial isinstance(..., int) accepted true.
-        self.assert_rejects(
-            '{"ticket_id":"Q-001","status":"todo","priority":true}',
-            "INVALID_PRIORITY",
-        )
-
-    def test_priority_bool_false_rejected(self) -> None:
-        # Non-regression: bool subclasses int; initial isinstance(..., int) accepted false.
-        self.assert_rejects(
-            '{"ticket_id":"Q-001","status":"todo","priority":false}',
-            "INVALID_PRIORITY",
-        )
+    def test_priority_unknown_regardless_of_value(self) -> None:
+        # Inverse Q3: priority is an unknown field for any value (Q1 contract).
+        for literal in ("0", "1", "2", "true", "false", "null"):
+            with self.subTest(priority=literal):
+                self.assert_rejects(
+                    '{"ticket_id":"Q-001","status":"todo","priority":'
+                    + literal
+                    + "}",
+                    "UNKNOWN_FIELD",
+                )
 
     def test_wrong_top_level_type(self) -> None:
         self.assert_rejects('["Q-001","todo"]', "NOT_OBJECT")
